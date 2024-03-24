@@ -1,0 +1,35 @@
+{
+  "name": "animevsub-download-manager",
+  "module": "src/main.ts",
+  "type": "module",
+  "scripts": {
+    "lint": "oxlint && bunx --bun eslint --ext .js,.ts,.vue ./",
+    "format": "bunx --bun prettier --write src",
+    "dev": "bun run --watch src/main.ts",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@tachibana-shin/eslint-config": "^1.1.1",
+    "@types/bun": "latest",
+    "@typescript-eslint/parser": "^7.3.1",
+    "eslint-plugin-oxlint": "^0.2.7",
+    "fake-indexeddb": "^5.0.2",
+    "happy-dom": "^14.3.1",
+    "hls-parser": "^0.10.9",
+    "indexeddb": "^0.0.0",
+    "oxlint": "^0.2.14",
+    "prettier": "^3.2.5",
+    "typescript": "latest",
+    "vitest": "^1.4.0"
+  },
+  "peerDependencies": {
+    "typescript": "^54.3"
+  },
+  "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.6.0",
+    "dexie": "^3.2.7",
+    "idb": "^8.0.0",
+    "idb-keyval": "^6.2.1",
+    "m3u8-parser": "^7.1.0"
+  }
+}
