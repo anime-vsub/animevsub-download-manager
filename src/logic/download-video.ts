@@ -3,18 +3,15 @@ import type Hls from "hls-parser"
 import { retry } from "./retry"
 import { sha256sum } from "./sha256sum"
 import { concurrent } from "./concurrent"
-import { Episode, OptionsHttp, Utils } from "../main"
+import { Episode, OptionsHttp, Utils, SeasonInfo } from "../main"
 
-function isMasterPlaylist(
-  manifest: Hls.types.MasterPlaylist | Hls.types.MediaPlaylist
-): manifest is Hls.types.MasterPlaylist {
-  return manifest.isMasterPlaylist
-}
+import { isMasterPlaylist } from "./is-master-playlist"
 
 /** @returns {number} is id number media playlist */
 export async function downloadVideo(
   content: string,
-  episode: Omit<Episode, "hash" | "content" | "hidden">,
+  seasonInfo: SeasonInfo,
+  episode: Omit<Episode, "hash" | "content" | "hidden" | "size">,
   resolvePlaylist: (manifest: Hls.types.MasterPlaylist) => Promise<string>,
   optionsHttp: OptionsHttp,
   utils: Pick<Utils, "readFile" | "writeFile" | "hasFile">
@@ -23,12 +20,20 @@ export async function downloadVideo(
 
   if (isMasterPlaylist(parsedManifest)) {
     const result = await resolvePlaylist(parsedManifest)
-    return downloadVideo(result, episode, resolvePlaylist, optionsHttp, utils)
+    return downloadVideo(
+      result,
+      seasonInfo,
+      episode,
+      resolvePlaylist,
+      optionsHttp,
+      utils
+    )
   }
 
-  const hashFilename = await sha256sum(episode.real_id)
-  const hlsInDatabase = (await utils
-    .readFile(`episodes/${hashFilename}`)
+
+  const hashFilename = (episode.real_id)
+  let hlsInDatabase = (await utils
+    .readFile(`/episodes/${hashFilename}`)
     .then((text) => JSON.parse(text))
     .catch((err) => void (err?.code === "ENOENT" || console.warn(err)))) as
     | Episode
@@ -36,45 +41,69 @@ export async function downloadVideo(
 
   if (hlsInDatabase && !hlsInDatabase.hidden) return hlsInDatabase.hash
 
+  if (!hlsInDatabase) {
+    hlsInDatabase = <Episode>{
+      ...episode,
+      hash: hashFilename,
+      hidden: true
+    }
+    await utils.writeFile(
+      `/episodes/${hashFilename}/index.meta`,
+      JSON.stringify(hlsInDatabase)
+    )
+  }
+
   // ok let go download files
   const hashSegments: string[] = []
 
-  // init media playlist
-  const mediaId =
-    hlsInDatabase?.hash ||
-    (await utils.writeFile(
-      `/episodes/${hashFilename}/index.m3u8`,
-      JSON.stringify(<Episode>{
-        ...episode,
-        hash: hashFilename,
-        content: "",
-        hidden: true
-      })
-    ),
-    hashFilename)
+          optionsHttp.onprogress(
+            seasonInfo,
+            hlsInDatabase!,
+           0,
+            parsedManifest.segments.length
+          )
+
+
+  console.log(parsedManifest.segments)
+  console.time()
+  let size = 0
   await concurrent(
     parsedManifest.segments,
-    async (segment, index) => {
+    async (segment) => {
       await retry(
         async (): Promise<void> => {
+          console.log("resolving: ", segment)
           // hash now
           const hash = await sha256sum(segment.uri)
-          const path = `/episodes/${mediaId}/segments/${hash}`
+          const path = `/episodes/${hashFilename}/segments/${hash}`
 
           const rowInDb = await utils.hasFile(path)
 
           if (!rowInDb) {
             const buffer = await retry(
-              () => optionsHttp.get(segment.uri),
+              () =>
+                optionsHttp
+                  .request(segment.uri)
+                  .then((res) => res.arrayBuffer())
+                  .then((buffer) => new Uint8Array(buffer)),
               optionsHttp
             )
 
             await utils.writeFile(path, buffer)
-
-            optionsHttp.onprogress(index, parsedManifest.segments.length)
+            size += buffer.length
+          } else {
+            size += rowInDb.size
+            console.log("segment size is %f kB", rowInDb.size / 1024)
           }
-
           hashSegments.push(hash)
+
+          optionsHttp.onprogress(
+            seasonInfo,
+            hlsInDatabase!,
+            hashSegments.length,
+            parsedManifest.segments.length
+          )
+
           segment.uri = `file:./segments/${hash}`
         },
         {
@@ -85,17 +114,22 @@ export async function downloadVideo(
     },
     optionsHttp.concurrent
   )
+  console.timeEnd()
 
   // update media playlist hidden = false
   await utils.writeFile(
-    `/episodes/${hashFilename}/index.m3u8`,
+    `/episodes/${hashFilename}/index.meta`,
     JSON.stringify(<Episode>{
       ...episode,
       hash: hashFilename,
-      content: stringify(parsedManifest),
-      hidden: false
+      hidden: false,
+      size
     })
   )
+  await utils.writeFile(
+    `/episodes/${hashFilename}/index.m3u8`,
+    stringify(parsedManifest)
+  )
 
-  return mediaId
+  return hashFilename
 }

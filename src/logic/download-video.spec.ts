@@ -5,7 +5,7 @@ import { get, set } from "idb-keyval"
 
 import { openDB, IDBPDatabase } from "idb"
 import FS from "@isomorphic-git/lightning-fs"
-import { Episode } from "../main"
+import { Episode, OptionsHttp, SeasonInfo, Utils } from "../main"
 
 const fs = new FS("filesystem").promises
 
@@ -47,24 +47,17 @@ output009.ts
   ): Promise<string> => {
     return m3u8
   }
-  const optionsHttp = {
-    get: <UseString extends boolean>(
-      uri: string,
-      _useString?: UseString
-    ): Promise<UseString extends true ? string : Uint8Array> =>
-      new Promise<UseString extends true ? string : Uint8Array>((resolve) =>
-        resolve(
-          new Uint8Array(encoder.encode(uri)) as UseString extends true
-            ? string
-            : Uint8Array
-        )
-      ),
+  const optionsHttp: OptionsHttp = {
+    request: (uri: string, method?: string) =>
+      Promise.resolve(new Response(uri, { status: 200 })),
     delay: 100,
     repeat: 5,
     concurrent: 2,
-    onprogress: (current: number, total: number) => void {}
+    onstart: () => void {},
+    onprogress: () => void {}
   }
-  const episode: Omit<Episode, "hash" | "content" | "hidden"> = {
+  const seasonInfo = {} as SeasonInfo
+  const episode: Omit<Episode, "hash" | "content" | "hidden" | "size"> = {
     id: "",
     real_id: realId,
     name,
@@ -79,17 +72,20 @@ output009.ts
       else throw err
     }
   }
-  const utils = {
+  const utils: Utils = {
     readdir(path: string) {
       return fs.readdir(path)
     },
     readFile(path: string) {
       return fs.readFile(path, "utf8") as Promise<string>
     },
+    readFiles(paths: string[]) {
+      return Promise.all(paths.map(file => this.readFile(file)))
+    },
     hasFile(path: string) {
       return fs
         .lstat(path)
-        .then((res) => res.isFile())
+        .then((res) => (res.isFile() ? { size: res.size } : false))
         .catch(() => false)
     },
     async writeFile(path: string, content: string | Uint8Array) {
@@ -155,7 +151,14 @@ output009.ts
   })
 
   test("download success all segments", async () => {
-    await downloadVideo(m3u8, episode, resolvePlaylist, optionsHttp, utils)
+    await downloadVideo(
+      m3u8,
+      seasonInfo,
+      episode,
+      resolvePlaylist,
+      optionsHttp,
+      utils
+    )
 
     expect(await fs.readdir("/episodes")).toEqual([m3u8tans.hash])
     expect(await fs.readdir(`/episodes/${m3u8tans.hash}`)).toEqual([

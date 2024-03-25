@@ -20,5 +20,8 @@ export async function concurrent<T, R>(
     }
   }
 
+// backup
+  await Promise.all(currentTask)
+
   return results
 }
