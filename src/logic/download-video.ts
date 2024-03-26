@@ -3,7 +3,7 @@ import type Hls from "hls-parser"
 import { retry } from "./retry"
 import { sha256sum } from "./sha256sum"
 import { concurrent } from "./concurrent"
-import { Episode, OptionsHttp, Utils, SeasonInfo } from "../main"
+import { Episode, OptionsHttp, Utils, SeasonInfo, AnimeDownloadManager } from "../main"
 
 import { isMasterPlaylist } from "./is-master-playlist"
 
@@ -11,11 +11,11 @@ import { isMasterPlaylist } from "./is-master-playlist"
 export async function downloadVideo(
   content: string,
   seasonInfo: SeasonInfo,
-  episode: Omit<Episode, "hash" | "content" | "hidden" | "size">,
+  episode: Omit<Episode, "hash" | "content" | "hidden" | "size" | "source">,
   resolvePlaylist: (manifest: Hls.types.MasterPlaylist) => Promise<string>,
   optionsHttp: OptionsHttp,
   utils: Pick<Utils, "readFile" | "writeFile" | "hasFile">
-): Promise<string> {
+): Promise<Episode> {
   const parsedManifest = parse(content)
 
   if (isMasterPlaylist(parsedManifest)) {
@@ -30,16 +30,15 @@ export async function downloadVideo(
     )
   }
 
-
-  const hashFilename = (episode.real_id)
+  const hashFilename = await sha256sum(episode.real_id)
   let hlsInDatabase = (await utils
-    .readFile(`/episodes/${hashFilename}`)
+    .readFile(`/${AnimeDownloadManager.constants.episodes}/${hashFilename}`)
     .then((text) => JSON.parse(text))
     .catch((err) => void (err?.code === "ENOENT" || console.warn(err)))) as
     | Episode
     | undefined
 
-  if (hlsInDatabase && !hlsInDatabase.hidden) return hlsInDatabase.hash
+  if (hlsInDatabase && !hlsInDatabase.hidden) return hlsInDatabase
 
   if (!hlsInDatabase) {
     hlsInDatabase = <Episode>{
@@ -48,7 +47,7 @@ export async function downloadVideo(
       hidden: true
     }
     await utils.writeFile(
-      `/episodes/${hashFilename}/index.meta`,
+      `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.meta`,
       JSON.stringify(hlsInDatabase)
     )
   }
@@ -56,13 +55,12 @@ export async function downloadVideo(
   // ok let go download files
   const hashSegments: string[] = []
 
-          optionsHttp.onprogress(
-            seasonInfo,
-            hlsInDatabase!,
-           0,
-            parsedManifest.segments.length
-          )
-
+  optionsHttp.onprogress(
+    seasonInfo,
+    hlsInDatabase!,
+    0,
+    parsedManifest.segments.length
+  )
 
   console.log(parsedManifest.segments)
   console.time()
@@ -75,7 +73,7 @@ export async function downloadVideo(
           console.log("resolving: ", segment)
           // hash now
           const hash = await sha256sum(segment.uri)
-          const path = `/episodes/${hashFilename}/segments/${hash}`
+          const path = `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/${AnimeDownloadManager.constants.segments}/${hash}`
 
           const rowInDb = await utils.hasFile(path)
 
@@ -104,7 +102,7 @@ export async function downloadVideo(
             parsedManifest.segments.length
           )
 
-          segment.uri = `file:./segments/${hash}`
+          segment.uri = `file:${path}`
         },
         {
           delay: 100,
@@ -116,20 +114,24 @@ export async function downloadVideo(
   )
   console.timeEnd()
 
+  Object.assign(hlsInDatabase, {
+    hash: hashFilename,
+    hidden: false,
+    size,
+    source: {
+      ...hlsInDatabase.source,
+      file: `file:/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.m3u8`
+    }
+  })
   // update media playlist hidden = false
   await utils.writeFile(
-    `/episodes/${hashFilename}/index.meta`,
-    JSON.stringify(<Episode>{
-      ...episode,
-      hash: hashFilename,
-      hidden: false,
-      size
-    })
-  )
-  await utils.writeFile(
-    `/episodes/${hashFilename}/index.m3u8`,
+    `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.m3u8`,
     stringify(parsedManifest)
   )
+  await utils.writeFile(
+    `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.meta`,
+    JSON.stringify(<Episode>hlsInDatabase)
+  )
 
-  return hashFilename
+  return hlsInDatabase
 }
