@@ -16,14 +16,14 @@ export interface SeasonInfo {
   /** @unique */
   seasonId: string
 
-  image: string
-  poster: string
+  image?: string
+  poster?: string
 
   name: string
   othername: string
   description: string
 
-  pathToView: string
+  pathToView?: string
   yearOf: number
 
   genre: Anchor[]
