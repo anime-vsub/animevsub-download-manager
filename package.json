@@ -9,7 +9,8 @@
     "dev": "bun run --watch src/main.ts",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "release": "bumpp"
+    "release": "bumpp",
+    "typing": "tsc --noEmit"
   },
   "devDependencies": {
     "@tachibana-shin/eslint-config": "^1.1.1",
