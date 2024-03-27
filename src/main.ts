@@ -212,7 +212,6 @@ export class AnimeDownloadManager {
     const content = await this.#optionsHttp
       .request(source.file)
       .then((res) => res.text())
-    const name = "playlist.m3u8"
     const optionsHttp = this.#optionsHttp
     const utils = this.#utils
 
@@ -298,7 +297,7 @@ export class AnimeDownloadManager {
   }
 
   public getListEpisodes(seasonId :string) {
-    return this.#utils.readFile( `/${AnimeDownloadManager.constants.lsEpisodes}/${seasonId}` , 'utf8')
+    return this.#utils.readFile(`/${AnimeDownloadManager.constants.lsEpisodes}/${seasonId}`)
     .then(json => JSON.parse(json) as Readonly<{
       chaps: readonly RawEpisode[]
       image: string
