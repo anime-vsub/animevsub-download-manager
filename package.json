@@ -2,7 +2,7 @@
   "name": "animevsub-download-manager",
   "module": "src/main.ts",
   "type": "module",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "scripts": {
     "lint": "oxlint && bunx --bun eslint --ext .js,.ts,.vue ./",
     "format": "bunx --bun prettier --write src",
