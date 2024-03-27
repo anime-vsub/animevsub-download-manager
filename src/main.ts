@@ -121,12 +121,12 @@ export class AnimeDownloadManager {
   readonly #optionsHttp: OptionsHttp
 
   static readonly constants = {
-    seasons: import.meta.env.DEV ? `seasons` : `00`,
-    posters: import.meta.env.DEV ? "posters" : "01",
-    episodes: import.meta.env.DEV ? `episodes` : `02`,
-    images: import.meta.env.DEV ? `images` : `03`,
-    segments: import.meta.env.DEV ? "segments" : "04",
-    lsEpisodes: import.meta.env.DEV ? "list-episodes": "05"
+    seasons: process.env.DEV ? `seasons` : `00`,
+    posters: process.env.DEV ? "posters" : "01",
+    episodes: process.env.DEV ? `episodes` : `02`,
+    images: process.env.DEV ? `images` : `03`,
+    segments: process.env.DEV ? "segments" : "04",
+    lsEpisodes: process.env.DEV ? "list-episodes": "05"
   }
 
   constructor(utils: Utils, optionsHttp: OptionsHttp) {
