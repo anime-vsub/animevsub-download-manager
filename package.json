@@ -6,7 +6,9 @@
     "lint": "oxlint && bunx --bun eslint --ext .js,.ts,.vue ./",
     "format": "bunx --bun prettier --write src",
     "dev": "bun run --watch src/main.ts",
-    "test": "vitest"
+    "test": "vitest --run",
+	"test:watch": "vitest",
+	"release": "bumpp"
   },
   "devDependencies": {
     "@tachibana-shin/eslint-config": "^1.1.1",
@@ -28,6 +30,7 @@
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.0",
+    "bumpp": "^9.4.0",
     "dexie": "^3.2.7",
     "idb": "^8.0.0",
     "idb-keyval": "^6.2.1",
