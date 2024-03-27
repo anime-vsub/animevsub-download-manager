@@ -31,7 +31,7 @@ export interface SeasonInfo {
   authors: Anchor[]
   contries: Anchor[]
 
-  view: number
+  views: number
   rate: number
   count_rate: number
 
