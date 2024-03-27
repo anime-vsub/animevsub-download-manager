@@ -177,7 +177,7 @@ export class AnimeDownloadManager {
     if (oldSeasonInfo !== seasonInfo) {
       Object.assign(oldSeasonInfo, seasonInfo)
       // download poster
-      if (!seasonInfo.poster.startsWith("file:")) {
+      if (!seasonInfo.poster?.startsWith("file:")) {
         const buffer = await this.#optionsHttp
           .request(seasonInfo.poster)
           .then((res) => res.arrayBuffer())
@@ -189,7 +189,7 @@ export class AnimeDownloadManager {
         oldSeasonInfo.poster = `file:/${AnimeDownloadManager.constants.posters}/${seasonId}`
       }
       // download image
-      if (!seasonInfo.image.startsWith("file:")) {
+      if (!seasonInfo.image?.startsWith("file:")) {
         const buffer = await this.#optionsHttp
           .request(seasonInfo.image)
           .then((res) => res.arrayBuffer())
