@@ -147,12 +147,12 @@ export class AnimeDownloadManager {
   }
 
   public async downloadEpisode(
-    seasonInfo: Omit<SeasonInfo, "episodeIds" | "updatedAt" | "size">,
-    listEpisodes: {
+    seasonInfo: Omit<SeasonInfo, "episodesOffline" | "updatedAt" | "size">,
+    listEpisodes: Readonly<{
       chaps: RawEpisode[]
       image: string
       poster: string
-    },
+    }>,
     episodeId: string,
     episodeRealId: string,
     source: Source,
