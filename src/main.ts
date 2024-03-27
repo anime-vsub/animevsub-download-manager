@@ -35,6 +35,10 @@ export interface SeasonInfo {
   rate: number
   count_rate: number
 
+
+  duration: string
+  season: Anchor[]
+
   language?: string
 
   studio?: string
@@ -119,7 +123,8 @@ export class AnimeDownloadManager {
     posters: import.meta.env.DEV ? "posters" : "01",
     episodes: import.meta.env.DEV ? `episodes` : `02`,
     images: import.meta.env.DEV ? `images` : `03`,
-    segments: import.meta.env.DEV ? "segments" : "04"
+    segments: import.meta.env.DEV ? "segments" : "04",
+    lsEpisodes: import.meta.env.DEV ? "list-episodes": "05"
   }
 
   constructor(utils: Utils, optionsHttp: OptionsHttp) {
@@ -197,7 +202,7 @@ export class AnimeDownloadManager {
       }
     }
     await this.lazyUpdateFile(
-      `/list-episodes/${seasonId}`,
+      `/${AnimeDownloadManager.constants.lsEpisodes}/${seasonId}`,
       JSON.stringify(listEpisodes)
     )
 
@@ -285,10 +290,20 @@ export class AnimeDownloadManager {
     ) as Episode
   }
 
+
   public hasEpisode(uniqueEpisode: string) {
     return this.#utils.hasFile(
       `/${AnimeDownloadManager.constants.episodes}/${uniqueEpisode}/index.meta`
     )
+  }
+
+  public getListEpisodes(seasonId :string) {
+    return this.#utils.readFile( `/${AnimeDownloadManager.constants.lsEpisodes}/${seasonId}` , 'utf8')
+    .then(json => JSON.parse(json) as Readonly<{
+      chaps: readonly RawEpisode[]
+      image: string
+      poster: string
+    }>)
   }
 
   public async getFileSize(file: string) {
