@@ -39,6 +39,8 @@ export interface SeasonInfo {
   duration: string
   season: Anchor[]
 
+  follows: number
+
   language?: string
 
   studio?: string
@@ -69,7 +71,7 @@ export interface Episode {
 export interface Source {
   readonly file: string
   readonly label: "FHD|HD" | "HD" | "FHD" | `${720 | 360 | 340}p`
-  readonly qualityCode: string
+  readonly qualityCode:  "720p" | "360p" | "340p" | "1080p|720p" | "1080p" | "480p"
   readonly preload?: string
   readonly type:
     | "hls"
