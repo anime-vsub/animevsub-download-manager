@@ -24,11 +24,8 @@
     "indexeddb": "^0.0.0",
     "oxlint": "^0.2.14",
     "prettier": "^3.2.5",
-    "typescript": "latest",
+    "typescript": "^5.4.3",
     "vitest": "^1.4.0"
-  },
-  "peerDependencies": {
-    "typescript": "^54.3"
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.0",
