@@ -35,7 +35,6 @@ export interface SeasonInfo {
   rate: number
   count_rate: number
 
-
   duration: string
   season: Anchor[]
 
@@ -65,13 +64,20 @@ export interface Episode {
   hidden: boolean
   real_id: string
   size: number
+  progress: { cur: number; total: number }
   source: Source
 }
 
 export interface Source {
   readonly file: string
   readonly label: "FHD|HD" | "HD" | "FHD" | `${720 | 360 | 340}p`
-  readonly qualityCode:  "720p" | "360p" | "340p" | "1080p|720p" | "1080p" | "480p"
+  readonly qualityCode:
+    | "720p"
+    | "360p"
+    | "340p"
+    | "1080p|720p"
+    | "1080p"
+    | "480p"
   readonly preload?: string
   readonly type:
     | "hls"
@@ -107,13 +113,10 @@ export interface OptionsHttp {
   ) => void
 }
 export interface Utils {
-  readdir(path: string): Promise<string[]>
-  readFile(path: string): Promise<string>
-  readFiles(paths: string[]): Promise<string[]>
-  hasFile(path: string): Promise<{ size: number } | false>
-  writeFile(path: string, data: string | Uint8Array): Promise<void>
-  writeFiles(contents: [string, string | Uint8Array][]): Promise<void>
-  unlinks(paths: string[]): Promise<void>
+  get(key: string): Promise<unknown>
+  set(key: string, data: unknown): Promise<void>
+  setMany(datas: [string, unknown][]): Promise<void>
+  getMany(keys: string[]): Promise<unknown[]>
 }
 
 export class AnimeDownloadManager {
@@ -126,7 +129,8 @@ export class AnimeDownloadManager {
     episodes: process.env.DEV ? `episodes` : `02`,
     images: process.env.DEV ? `images` : `03`,
     segments: process.env.DEV ? "segments" : "04",
-    lsEpisodes: process.env.DEV ? "list-episodes": "05"
+    lsEpisodes: process.env.DEV ? "list-episodes" : "05",
+    allseasons: process.env.DEV ? "all-season" : "06"
   }
 
   constructor(utils: Utils, optionsHttp: OptionsHttp) {
@@ -138,15 +142,13 @@ export class AnimeDownloadManager {
     pathname: string,
     content: string | Uint8Array
   ): Promise<void> {
-    const hash = await this.#utils
-      .readFile(`${pathname}.hash`)
-      .catch(() => null)
+    const hash = await this.#utils.get(`${pathname}.hash`).catch(() => null)
 
     const newHash = await sha256sum(content)
 
-    if (content !== newHash) {
+    if (hash !== newHash) {
       // wrong hash -> update this
-      await this.#utils.writeFiles([
+      await this.#utils.setMany([
         [pathname, content],
         [`${pathname}.hash`, newHash]
       ])
@@ -167,14 +169,16 @@ export class AnimeDownloadManager {
   ) {
     // save seasonInfo
     const seasonId = seasonInfo.seasonId
-    const oldSeasonInfo = ((await this.#utils
-      .readFile(`/${AnimeDownloadManager.constants.seasons}/${seasonId}`)
-      .then((res) => JSON.parse(res))
-      .catch(() => null)) as SeasonInfo | undefined) ??<SeasonInfo> {
-      ...seasonInfo,
-      episodesOffline: {},
-      updatedAt: -1
-    }
+    const oldSeasonInfo =
+      ((await this.#utils
+        .get(`/${AnimeDownloadManager.constants.seasons}/${seasonId}`)
+        .then((res) => (res ? JSON.parse(res as string) : null))
+        .catch(() => null)) as SeasonInfo | null) ??
+      <SeasonInfo>{
+        ...seasonInfo,
+        episodesOffline: {},
+        updatedAt: -1
+      }
 
     if (oldSeasonInfo !== seasonInfo) {
       Object.assign(oldSeasonInfo, seasonInfo)
@@ -184,7 +188,7 @@ export class AnimeDownloadManager {
           .request(seasonInfo.poster)
           .then((res) => res.arrayBuffer())
           .then((buffer) => new Uint8Array(buffer))
-        await this.#utils.writeFile(
+        await this.#utils.set(
           `/${AnimeDownloadManager.constants.posters}/${seasonId}`,
           buffer
         )
@@ -196,7 +200,7 @@ export class AnimeDownloadManager {
           .request(seasonInfo.image)
           .then((res) => res.arrayBuffer())
           .then((buffer) => new Uint8Array(buffer))
-        await this.#utils.writeFile(
+        await this.#utils.set(
           `/${AnimeDownloadManager.constants.images}/${seasonId}`,
           buffer
         )
@@ -223,7 +227,8 @@ export class AnimeDownloadManager {
       source,
       hash: "",
       hidden: true,
-      size: 0
+      size: 0,
+      progress: { cur: 0, total: Infinity }
     }
     this.#optionsHttp.onstart(oldSeasonInfo, episodeStart)
     const episode = await downloadVideo(
@@ -234,39 +239,57 @@ export class AnimeDownloadManager {
       optionsHttp,
       utils
     )
-    oldSeasonInfo.episodesOffline[ episode. id ] = (episode)
+    oldSeasonInfo.episodesOffline[episode.id] = episode
     // now you can save episodes
-    await this.#utils.writeFile(
-      `/${AnimeDownloadManager.constants.seasons}/${seasonId}`,
-      JSON.stringify(oldSeasonInfo)
-    )
+    await this.#utils.setMany([
+      [
+        `/${AnimeDownloadManager.constants.seasons}/${seasonId}`,
+        JSON.stringify(oldSeasonInfo)
+      ],
+      [
+        `/${AnimeDownloadManager.constants.allseasons}`,
+        [
+          ...(await this.#utils
+            .get(`/${AnimeDownloadManager.constants.allseasons}`)
+            .then((res) => (res ? JSON.parse(res as string) : []))
+            .catch((err) => (console.warn(err), []))),
+          seasonId
+        ]
+      ]
+    ])
   }
 
   public async getSeason(seasonId: string) {
     const content = (await this.#utils
-      .readFile(`/${AnimeDownloadManager.constants.seasons}/${seasonId}`)
-      .then((res) => JSON.parse(res))) as SeasonInfo
+      .get(`/${AnimeDownloadManager.constants.seasons}/${seasonId}`)
+      .then((res) => (res ? JSON.parse(res as string) : null))
+      .catch(() => null)) as SeasonInfo | null
 
     return content
   }
 
-  public async listSeason(sort: "asc" | "desc" = "asc") {
-    const filesName = await this.#utils.readdir(
-      `/${AnimeDownloadManager.constants.seasons}`
-    )
+  public async listSeason(
+    sort: "asc" | "desc" = "asc",
+    limit: number = -1 >>> 0,
+    after: number = 0
+  ) {
+    const filesName = (await this.#utils
+      .get(`/${AnimeDownloadManager.constants.allseasons}`)
+      .then((res) => (res ? JSON.parse(res as string) : []))) as string[]
 
     const contents = await this.#utils
-      .readFiles(
-        filesName.map(
-          (name) => `/${AnimeDownloadManager.constants.seasons}/${name}`
-        )
+      .getMany(
+        filesName
+          .slice(after, limit)
+          .map((name) => `/${AnimeDownloadManager.constants.seasons}/${name}`)
       )
       .then(
         (contents) =>
           contents
             .map((json) => {
+              if (!json) return
               try {
-                return JSON.parse(json) as SeasonInfo
+                return JSON.parse(json as string) as SeasonInfo
               } catch (err) {
                 console.warn(err)
               }
@@ -285,28 +308,41 @@ export class AnimeDownloadManager {
 
   public async getEpisode(uniqueEpisode: string) {
     const hash = await sha256sum(uniqueEpisode)
-    return JSON.parse(
-      await this.#utils.readFile(
-        `/${AnimeDownloadManager.constants.episodes}/${hash}/index.meta`
-      )
-    ) as Episode
-  }
+    const data = (await this.#utils.get(
+      `/${AnimeDownloadManager.constants.episodes}/${hash}/index.meta`
+    )) as string
 
+    if (!data) return null
+
+    try {
+      return JSON.parse(data) as Episode
+    } catch (err) {
+      console.warn(err)
+
+      return null
+    }
+  }
 
   public async hasEpisode(uniqueEpisode: string) {
     const hash = await sha256sum(uniqueEpisode)
-    return this.#utils.hasFile(
+    return !!this.#utils.get(
       `/${AnimeDownloadManager.constants.episodes}/${hash}/index.meta`
     )
   }
 
-  public getListEpisodes(seasonId :string) {
-    return this.#utils.readFile(`/${AnimeDownloadManager.constants.lsEpisodes}/${seasonId}`)
-    .then(json => JSON.parse(json) as Readonly<{
-      chaps: readonly RawEpisode[]
-      image: string
-      poster: string
-    }>)
+  public getListEpisodes(seasonId: string) {
+    return this.#utils
+      .get(`/${AnimeDownloadManager.constants.lsEpisodes}/${seasonId}`)
+      .then((json) =>
+        json
+          ? (JSON.parse(json as string) as Readonly<{
+              chaps: readonly RawEpisode[]
+              image: string
+              poster: string
+            }>)
+          : null
+      )
+      .catch(() => null)
   }
 
   public async getFileSize(file: string) {

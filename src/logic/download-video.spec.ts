@@ -1,9 +1,7 @@
 import { downloadVideo } from "./download-video"
 import Hls from "hls-parser"
 import { sha256sum } from "./sha256sum"
-import { get, set } from "idb-keyval"
 
-import { openDB, IDBPDatabase } from "idb"
 import FS from "@isomorphic-git/lightning-fs"
 import {
   AnimeDownloadManager,
@@ -68,7 +66,8 @@ output009.ts
     "hash" | "content" | "hidden" | "size" | "source"
   > = {
     id: "",
-    real_id: realId
+    real_id: realId,
+    progress: { cur: 10, total: 10 }
   }
   async function mkdirRecursive(path: string) {
     try {
@@ -80,39 +79,29 @@ output009.ts
     }
   }
   const utils: Utils = {
-    readdir(path: string) {
-      return fs.readdir(path)
-    },
-    readFile(path: string) {
+    get(path: string) {
       return fs.readFile(path, "utf8") as Promise<string>
     },
-    readFiles(paths: string[]) {
-      return Promise.all(paths.map((file) => this.readFile(file)))
-    },
-    hasFile(path: string) {
-      return fs
-        .lstat(path)
-        .then((res) => (res.isFile() ? { size: res.size } : false))
-        .catch(() => false)
-    },
-    async writeFile(path: string, content: string | Uint8Array) {
+    async set(path: string, content: string | Uint8Array) {
       await fs.writeFile(path, content).catch((err) => {
         if (err.code === "ENOENT") {
           return mkdirRecursive(path.split("/").slice(0, -1).join("/")).then(
-            () => this.writeFile(path, content)
+            () => this.set(path, content)
           )
         }
 
         throw err
       })
     },
-    async writeFiles(contents: [string, string | Uint8Array][]): Promise<void> {
+    async setMany(contents: [string, string | Uint8Array][]): Promise<void> {
       await Promise.all(
-        contents.map(([path, content]) => this.writeFile(path, content))
+        contents.map(([path, content]) => this.set(path, content))
       )
     },
-    async unlinks(paths: string[]): Promise<void> {
-      await Promise.all(paths.map((path) => fs.unlink(path)))
+    async getMany(paths: string[]): Promise<unknown[]> {
+      return Promise.all(
+        paths.map(path => this.get(path))
+      )
     }
   }
 
@@ -158,6 +147,10 @@ output009.ts
       size: 120,
       source: {
         file: `file:/${AnimeDownloadManager.constants.episodes}/2caf4264aeb367070107aba7a671da16589c59121cdd605870fd247cb28085ee/index.m3u8`
+      },
+      progress: {
+        cur: 10,
+        total: 10
       }
     }
 
@@ -233,19 +226,23 @@ output009.ts
 
   test("work if change constants", async () => {
     for (const key in AnimeDownloadManager.constants) {
-      (AnimeDownloadManager.constants as unknown as any)[key] += "-changed"
+      ;(AnimeDownloadManager.constants as unknown as any)[key] += "-changed"
     }
 
-  const m3u8tans = {
-    hash: "2caf4264aeb367070107aba7a671da16589c59121cdd605870fd247cb28085ee",
-    hidden: false,
-    id: "",
-    real_id: "playlist.m3u8",
-    size: 120,
-    source: {
-      file: `file:/${AnimeDownloadManager.constants.episodes}/2caf4264aeb367070107aba7a671da16589c59121cdd605870fd247cb28085ee/index.m3u8`
+    const m3u8tans = {
+      hash: "2caf4264aeb367070107aba7a671da16589c59121cdd605870fd247cb28085ee",
+      hidden: false,
+      id: "",
+      real_id: "playlist.m3u8",
+      size: 120,
+      source: {
+        file: `file:/${AnimeDownloadManager.constants.episodes}/2caf4264aeb367070107aba7a671da16589c59121cdd605870fd247cb28085ee/index.m3u8`
+      },
+      progress: {
+        cur: 10,
+        total: 10
+      }
     }
-  }
 
     await downloadVideo(
       m3u8,
