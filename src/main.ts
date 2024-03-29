@@ -48,7 +48,7 @@ export interface SeasonInfo {
 
   trailer?: string
 
-  episodesOffline: Episode[]
+  episodesOffline: Record<string, Episode>
   updatedAt: number
 }
 
@@ -172,7 +172,7 @@ export class AnimeDownloadManager {
       .then((res) => JSON.parse(res))
       .catch(() => null)) as SeasonInfo | undefined) ??<SeasonInfo> {
       ...seasonInfo,
-      episodesOffline: [],
+      episodesOffline: {},
       updatedAt: -1
     }
 
@@ -209,7 +209,7 @@ export class AnimeDownloadManager {
     )
 
     oldSeasonInfo.updatedAt = Date.now()
-    oldSeasonInfo.episodesOffline ??= []
+    oldSeasonInfo.episodesOffline ??= {}
 
     const content = await this.#optionsHttp
       .request(source.file)
@@ -234,7 +234,7 @@ export class AnimeDownloadManager {
       optionsHttp,
       utils
     )
-    oldSeasonInfo.episodesOffline.push(episode)
+    oldSeasonInfo.episodesOffline[ episode. id ] = (episode)
     // now you can save episodes
     await this.#utils.writeFile(
       `/${AnimeDownloadManager.constants.seasons}/${seasonId}`,
@@ -284,17 +284,19 @@ export class AnimeDownloadManager {
   }
 
   public async getEpisode(uniqueEpisode: string) {
+    const hash = await sha256sum(uniqueEpisode)
     return JSON.parse(
       await this.#utils.readFile(
-        `/${AnimeDownloadManager.constants.episodes}/${uniqueEpisode}/index.meta`
+        `/${AnimeDownloadManager.constants.episodes}/${hash}/index.meta`
       )
     ) as Episode
   }
 
 
-  public hasEpisode(uniqueEpisode: string) {
+  public async hasEpisode(uniqueEpisode: string) {
+    const hash = await sha256sum(uniqueEpisode)
     return this.#utils.hasFile(
-      `/${AnimeDownloadManager.constants.episodes}/${uniqueEpisode}/index.meta`
+      `/${AnimeDownloadManager.constants.episodes}/${hash}/index.meta`
     )
   }
 

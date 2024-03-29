@@ -31,6 +31,7 @@ export async function downloadVideo(
   }
 
   const hashFilename = await sha256sum(episode.real_id)
+  console.log({ hashFilename })
   let hlsInDatabase = (await utils
     .readFile(`/${AnimeDownloadManager.constants.episodes}/${hashFilename}`)
     .then((text) => JSON.parse(text))
@@ -132,6 +133,13 @@ export async function downloadVideo(
     `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.meta`,
     JSON.stringify(<Episode>hlsInDatabase)
   )
+
+          optionsHttp.onprogress(
+            seasonInfo,
+            hlsInDatabase!,
+            hashSegments.length,
+            parsedManifest.segments.length
+          )
 
   return hlsInDatabase
 }
