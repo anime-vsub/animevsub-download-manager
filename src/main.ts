@@ -37,6 +37,7 @@ export interface SeasonInfo {
 
   duration: string
   season: Anchor[]
+  currentSeason: Anchor
 
   follows: number
 
