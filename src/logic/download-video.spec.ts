@@ -99,9 +99,7 @@ output009.ts
       )
     },
     async getMany(paths: string[]): Promise<unknown[]> {
-      return Promise.all(
-        paths.map(path => this.get(path))
-      )
+      return Promise.all(paths.map((path) => this.get(path)))
     }
   }
 

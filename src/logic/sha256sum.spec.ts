@@ -16,6 +16,8 @@ describe("sha256sum function", () => {
 
     const result = await sha256sum(inputBuffer)
 
-    expect(result).toBe("d20650a81ee76b110d2b810bae1b9a784fd4a66ee520ca924a9a02e24dbba6d3")
+    expect(result).toBe(
+      "d20650a81ee76b110d2b810bae1b9a784fd4a66ee520ca924a9a02e24dbba6d3"
+    )
   })
 })

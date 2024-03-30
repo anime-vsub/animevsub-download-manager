@@ -248,13 +248,13 @@ export class AnimeDownloadManager {
       ],
       [
         `/${AnimeDownloadManager.constants.allseasons}`,
-        [
+        JSON.stringify([
           ...(await this.#utils
             .get(`/${AnimeDownloadManager.constants.allseasons}`)
             .then((res) => (res ? JSON.parse(res as string) : []))
             .catch((err) => (console.warn(err), []))),
           seasonId
-        ]
+        ])
       ]
     ])
   }
