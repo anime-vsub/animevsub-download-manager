@@ -101,7 +101,7 @@ export interface Source {
 }
 
 export interface OptionsHttp {
-  request(uri: string, method?: string): Promise<Response>
+  request(uri: string, method?: string, onprogress?: (received: number, total: number) => void): Promise<Response>
   delay: number
   repeat: number
   concurrent: number

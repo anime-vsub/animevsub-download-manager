@@ -52,7 +52,7 @@ output009.ts
     return m3u8
   }
   const optionsHttp: OptionsHttp = {
-    request: (uri: string, method?: string) =>
+    request: (uri: string, method?: string, onprogress?: (received: number, total: number) => void) =>
       Promise.resolve(new Response(uri, { status: 200 })),
     delay: 100,
     repeat: 5,

@@ -59,6 +59,12 @@ export async function downloadVideo(
 
   // ok let go download files
   const hashSegments: string[] = []
+  const progressingSegments = new Map<string, number>()
+  const totalProgressing = (): number => {
+    let total = 0
+    progressingSegments.forEach(value => void (total += value))
+    return total
+  }
 
   optionsHttp.onprogress(
     seasonInfo,
@@ -86,14 +92,16 @@ export async function downloadVideo(
             const buffer = await retry(
               () =>
                 optionsHttp
-                  .request(segment.uri)
+                  .request(segment.uri, 'get', (received, total) => {
+                    progressingSegments.set( hash , received / total )
+                  })
                   .then((res) => res.arrayBuffer())
                   .then((buffer) => new Uint8Array(buffer)),
               optionsHttp
             )
 
             hlsInDatabase!.progress = {
-              cur: hashSegments.length,
+              cur: hashSegments.length + totalProgressing(),
               total: parsedManifest.segments.length
             }
             await utils.setMany([
@@ -107,7 +115,7 @@ export async function downloadVideo(
           } else {
             size += (rowInDb as Uint8Array).byteLength
             hlsInDatabase!.progress = {
-              cur: hashSegments.length,
+              cur: hashSegments.length + totalProgressing(),
               total: parsedManifest.segments.length
             }
             console.log(
@@ -116,11 +124,12 @@ export async function downloadVideo(
             )
           }
           hashSegments.push(hash)
+          progressingSegments.delete(hash)
 
           optionsHttp.onprogress(
             seasonInfo,
             hlsInDatabase!,
-            hashSegments.length,
+            hashSegments.length + totalProgressing(),
             parsedManifest.segments.length
           )
 
