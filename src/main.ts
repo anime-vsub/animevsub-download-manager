@@ -216,9 +216,6 @@ export class AnimeDownloadManager {
     oldSeasonInfo.updatedAt = Date.now()
     oldSeasonInfo.episodesOffline ??= {}
 
-    const content = await this.#optionsHttp
-      .request(source.file)
-      .then((res) => res.text())
     const optionsHttp = this.#optionsHttp
     const utils = this.#utils
 
@@ -233,7 +230,7 @@ export class AnimeDownloadManager {
     }
     this.#optionsHttp.onstart(oldSeasonInfo, episodeStart)
     const episode = await downloadVideo(
-      content,
+      source,
       oldSeasonInfo,
       episodeStart,
       resolvePlaylist,

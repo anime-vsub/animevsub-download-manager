@@ -8,32 +8,43 @@ import {
   OptionsHttp,
   Utils,
   SeasonInfo,
-  AnimeDownloadManager
+  AnimeDownloadManager,
+  Source
 } from "../main"
 
 import { isMasterPlaylist } from "./is-master-playlist"
 
+const typesStream = ["hls", "m3u8", "m3u"]
 /** @returns {number} is id number media playlist */
 export async function downloadVideo(
-  content: string,
+  source: Source,
   seasonInfo: SeasonInfo,
   episode: Omit<Episode, "hash" | "content" | "hidden" | "size" | "source">,
   resolvePlaylist: (manifest: Hls.types.MasterPlaylist) => Promise<string>,
   optionsHttp: OptionsHttp,
   utils: Utils
 ): Promise<Episode> {
-  const parsedManifest = parse(content)
+  let parsedManifest: Hls.types.MediaPlaylist | null = null
+  if (typesStream.includes(source.type)) {
+    const content = await optionsHttp
+      .request(source.file)
+      .then((res) => res.text())
 
-  if (isMasterPlaylist(parsedManifest)) {
-    const result = await resolvePlaylist(parsedManifest)
-    return downloadVideo(
-      result,
-      seasonInfo,
-      episode,
-      resolvePlaylist,
-      optionsHttp,
-      utils
-    )
+    const $parsedManifest = parse(content)
+
+    if (isMasterPlaylist($parsedManifest)) {
+      const result = await resolvePlaylist($parsedManifest)
+      return downloadVideo(
+        { ...source, file: result },
+        seasonInfo,
+        episode,
+        resolvePlaylist,
+        optionsHttp,
+        utils
+      )
+    } else {
+      parsedManifest = $parsedManifest
+    }
   }
 
   const hashFilename = await sha256sum(episode.real_id)
@@ -62,7 +73,7 @@ export async function downloadVideo(
   const progressingSegments = new Map<string, number>()
   const totalProgressing = (): number => {
     let total = 0
-    progressingSegments.forEach(value => void (total += value))
+    progressingSegments.forEach((value) => void (total += value))
     return total
   }
 
@@ -70,79 +81,105 @@ export async function downloadVideo(
     seasonInfo,
     hlsInDatabase!,
     0,
-    parsedManifest.segments.length
+    parsedManifest?.segments.length ?? 1
   )
 
-  console.log(parsedManifest.segments)
+  console.log(parsedManifest?.segments ?? 1)
   console.time()
   let size = 0
-  await concurrent(
-    parsedManifest.segments,
-    async (segment) => {
-      await retry(
-        async (): Promise<void> => {
-          console.log("resolving: ", segment)
-          // hash now
-          const hash = await sha256sum(segment.uri)
-          const path = `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/${AnimeDownloadManager.constants.segments}/${hash}`
+  let content: Uint8Array | null = null
+  if (parsedManifest) {
+    await concurrent(
+      parsedManifest.segments,
+      async (segment) => {
+        await retry(
+          async (): Promise<void> => {
+            console.log("resolving: ", segment)
+            // hash now
+            const hash = await sha256sum(segment.uri)
+            const path = `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/${AnimeDownloadManager.constants.segments}/${hash}`
 
-          const rowInDb = await utils.get(path).catch(() => null)
+            const rowInDb = await utils.get(path).catch(() => null)
 
-          if (!rowInDb) {
-            const buffer = await retry(
-              () =>
+            if (!rowInDb) {
+              const buffer = await retry(
+                () =>
+                  optionsHttp
+                    .request(segment.uri, "get", (received, total) => {
+                      progressingSegments.set(hash, received / total)
+                    })
+                    .then((res) => res.arrayBuffer())
+                    .then((buffer) => new Uint8Array(buffer)),
                 optionsHttp
-                  .request(segment.uri, 'get', (received, total) => {
-                    progressingSegments.set( hash , received / total )
-                  })
-                  .then((res) => res.arrayBuffer())
-                  .then((buffer) => new Uint8Array(buffer)),
-              optionsHttp
+              )
+
+              hlsInDatabase!.progress = {
+                cur: hashSegments.length + totalProgressing(),
+                total: parsedManifest!.segments.length
+              }
+              await utils.setMany([
+                [
+                  `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.meta`,
+                  JSON.stringify(hlsInDatabase)
+                ],
+                [path, buffer]
+              ])
+              size += buffer.byteLength
+            } else {
+              size += (rowInDb as Uint8Array).byteLength
+              hlsInDatabase!.progress = {
+                cur: hashSegments.length + totalProgressing(),
+                total: parsedManifest!.segments.length
+              }
+              console.log(
+                "segment size is %f kB",
+                (rowInDb as Uint8Array).byteLength / 1024
+              )
+            }
+            hashSegments.push(hash)
+            progressingSegments.delete(hash)
+
+            optionsHttp.onprogress(
+              seasonInfo,
+              hlsInDatabase!,
+              hashSegments.length + totalProgressing(),
+              parsedManifest!.segments.length
             )
 
-            hlsInDatabase!.progress = {
-              cur: hashSegments.length + totalProgressing(),
-              total: parsedManifest.segments.length
-            }
-            await utils.setMany([
-              [
-                `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.meta`,
-                JSON.stringify(hlsInDatabase)
-              ],
-              [path, buffer]
-            ])
-            size += buffer.byteLength
-          } else {
-            size += (rowInDb as Uint8Array).byteLength
-            hlsInDatabase!.progress = {
-              cur: hashSegments.length + totalProgressing(),
-              total: parsedManifest.segments.length
-            }
-            console.log(
-              "segment size is %f kB",
-              (rowInDb as Uint8Array).byteLength / 1024
-            )
+            segment.uri = `file:${path}`
+          },
+          {
+            delay: 100,
+            repeat: 5
           }
-          hashSegments.push(hash)
-          progressingSegments.delete(hash)
+        )
+      },
+      optionsHttp.concurrent
+    )
+  } else {
+    const hash = await sha256sum(source.file)
+    content = await optionsHttp
+      .request(source.file, "get", (received, total) => {
+        progressingSegments.set(hash, received / total)
 
-          optionsHttp.onprogress(
-            seasonInfo,
-            hlsInDatabase!,
-            hashSegments.length + totalProgressing(),
-            parsedManifest.segments.length
-          )
-
-          segment.uri = `file:${path}`
-        },
-        {
-          delay: 100,
-          repeat: 5
+        hlsInDatabase!.progress = {
+          cur: totalProgressing(),
+          total: 1
         }
-      )
-    },
-    optionsHttp.concurrent
-  )
+
+        optionsHttp.onprogress(
+          seasonInfo,
+          hlsInDatabase!,
+          totalProgressing(),
+          1
+        )
+      })
+      .then((res) => res.arrayBuffer())
+      .then((buffer) => new Uint8Array(buffer))
+
+    hashSegments.push(hash)
+    progressingSegments.delete(hash)
+  }
   console.timeEnd()
 
   Object.assign(hlsInDatabase, {
@@ -151,18 +188,18 @@ export async function downloadVideo(
     size,
     source: {
       ...hlsInDatabase.source,
-      file: `file:/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.m3u8`
+      file: `file:/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index`
     },
     progress: {
-      cur: parsedManifest.segments.length,
-      total: parsedManifest.segments.length
+      cur: parsedManifest?.segments.length ?? 1,
+      total: parsedManifest?.segments.length ?? 1
     }
   })
   // update media playlist hidden = false
   await utils.setMany([
     [
-      `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.m3u8`,
-      stringify(parsedManifest)
+      `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index`,
+      parsedManifest ? stringify(parsedManifest) : content
     ],
     [
       `/${AnimeDownloadManager.constants.episodes}/${hashFilename}/index.meta`,
@@ -174,7 +211,7 @@ export async function downloadVideo(
     seasonInfo,
     hlsInDatabase!,
     hashSegments.length,
-    parsedManifest.segments.length
+    parsedManifest?.segments.length ?? 1
   )
 
   return hlsInDatabase
