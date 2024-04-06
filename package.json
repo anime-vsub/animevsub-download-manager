@@ -16,16 +16,16 @@
   "devDependencies": {
     "@tachibana-shin/eslint-config": "^1.1.1",
     "@types/bun": "latest",
-    "@typescript-eslint/parser": "^7.3.1",
+    "@typescript-eslint/parser": "^7.5.0",
     "eslint": "^8.57.0",
     "eslint-plugin-oxlint": "^0.2.7",
     "fake-indexeddb": "^5.0.2",
-    "happy-dom": "^14.3.1",
-    "hls-parser": "^0.10.9",
+    "happy-dom": "^14.5.1",
+    "hls-parser": "^0.11.0",
     "indexeddb": "^0.0.0",
-    "oxlint": "^0.2.14",
+    "oxlint": "^0.2.15",
     "prettier": "^3.2.5",
-    "typescript": "^5.4.3",
+    "typescript": "^5.4.4",
     "vitest": "^1.4.0"
   },
   "dependencies": {
