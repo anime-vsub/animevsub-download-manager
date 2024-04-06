@@ -3,7 +3,7 @@
   "module": "src/main.ts",
   "types": "src/main.ts",
   "type": "module",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "scripts": {
     "lint": "oxlint && bunx --bun eslint --ext .js,.ts,.vue ./",
     "format": "bunx --bun prettier --write src",
